@@ -1,50 +1,207 @@
+#  Cardiovascular Risk Assessment — Clinical Decision Support Tool
 
-# Heart Disease Prediction
+[![HuggingFace](https://img.shields.io/badge/🤗%20HuggingFace-Spaces-blue)](https://huggingface.co/spaces/Hasti-26/Cardiovascular-Risk-Assessment)
+[![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.0+-orange)](https://scikit-learn.org)
+[![Gradio](https://img.shields.io/badge/Gradio-3.0+-red)](https://gradio.app)
 
-This project aims to develop a heart disease prediction model using machine learning techniques. The model utilizes a dataset containing various features related to heart health and applies classification algorithms to predict the likelihood of a person having heart disease.
+> A clinical decision support tool that predicts cardiovascular risk from 11 patient parameters — and explains *why* each factor contributes to the prediction, not just whether disease is likely.
 
-## Dataset
+---
 
-The dataset used for training and evaluation contains information about patients and several health attributes that could be indicative of heart disease. The features include:
+## 🎯 Overview
 
-1. Age: The age of the patient (in years).
-2. Sex: The gender of the patient (0 = female, 1 = male).
-3. Chest Pain Type: The type of chest pain experienced by the patient (1 = typical angina, 2 = atypical angina, 3 = non-anginal pain, 4 = asymptomatic).
-4. Resting Blood Pressure: The resting blood pressure of the patient (in mm Hg on admission to the hospital).
-5. Cholesterol: The serum cholesterol level of the patient (in mg/dl).
-6. Fasting Blood Sugar: The fasting blood sugar level of the patient (> 120 mg/dl = 1, 0 = otherwise).
-7. Resting Electrocardiographic Results: Results of the resting electrocardiogram (0 = normal, 1 = having ST-T wave abnormality, 2 = left ventricular hypertrophy).
-8. Maximum Heart Rate Achieved: The maximum heart rate achieved during exercise.
-9. Exercise-Induced Angina: Exercise-induced angina (1 = yes, 0 = no).
-10. ST Depression Induced by Exercise: ST depression induced by exercise relative to rest.
-11. Slope of the Peak Exercise ST Segment: The slope of the peak exercise ST segment (1 = upsloping, 2 = flat, 3 = downsloping).
-12. HeartDisease : output class [1= heart disease, 0 = Normal]
+Most heart disease prediction models give you a number and stop there. This tool goes further — it tells a clinician which findings are driving the risk, why they matter clinically, and what to do next.
 
-The target variable is the presence of heart disease, where 1 indicates the presence and 0 indicates the absence of heart disease.
+Built on **918 patient records** from the UCI Heart Disease dataset, the tool combines a machine learning pipeline with structured clinical reasoning to produce outputs that mirror how a cardiologist actually thinks.
 
-## Model
+---
 
-The heart disease prediction model is built using a machine learning algorithm, specifically a classification algorithm. The dataset is split into a training set and a testing set to train and evaluate the model's performance.
+## 📊 Model Performance
 
-Several classification algorithms can be applied to this problem, such as logistic regression, decision trees, random forests, or support vector machines (SVM). The choice of algorithm can vary depending on the performance and interpretability requirements.
+| Metric | Score |
+|---|---|
+| Accuracy | 88.6% |
+| F1 Score | 0.900 |
+| **Recall** | **93.1%** |
+| Precision | 87.2% |
+| AUC-ROC | 0.900 |
 
-The model is trained on the training set and then evaluated on the testing set to assess its accuracy in predicting heart disease. Evaluation metrics such as accuracy, precision, recall, and F1 score can be used to measure the model's performance.
+> Recall is the headline metric — in clinical screening, missing a sick patient is far more dangerous than a false alarm. 93.1% means the model catches 95 out of 102 actual heart disease cases.
 
-## Usage
+---
 
-To use the heart disease prediction model, follow these steps:
+## 🖥️ Demo
 
-1. Ensure you have the required dependencies installed (Python, scikit-learn, etc.).
-2. Download or access the heart disease dataset.
-3. Preprocess the dataset by handling missing values, normalizing features, and splitting it into training and testing sets.
-4. Train the heart disease prediction model using a suitable classification algorithm.
-5. Evaluate the model's performance using appropriate evaluation metrics.
-6. Save the trained model for future predictions.
-7. Load the saved model when needed and utilize it to predict heart disease based on new input data.
+![Demo Screenshot](screenshot.png)
 
-## Further Improvements
+🔗 **Live Demo:** [HuggingFace Spaces](https://huggingface.co/spaces/Hasti-26/Cardiovascular-Risk-Assessment)
 
-The heart disease prediction model can be further improved in several ways:
+---
 
-1. Feature Engineering: Exploring and deriving new features that may have a stronger correlation with heart disease can enhance the model's predictive power.
-2. Hyperparameter Tuning: Optimizing the parameters
+## 🔬 How It Works
+
+### Input
+The user enters 11 clinical parameters:
+
+| Parameter | Description |
+|---|---|
+| Age | Patient age in years |
+| Sex | Biological sex (M/F) |
+| ChestPainType | TA / ATA / NAP / ASY |
+| RestingBP | Resting blood pressure (mmHg) |
+| Cholesterol | Total cholesterol (mg/dL) |
+| FastingBS | Fasting blood sugar > 120 mg/dL |
+| RestingECG | Normal / ST abnormality / LVH |
+| MaxHR | Maximum heart rate achieved |
+| ExerciseAngina | Exercise-induced angina (Y/N) |
+| Oldpeak | ST depression (mm) |
+| ST_Slope | Up / Flat / Down |
+
+### Output
+1. **Risk Probability** — exact percentage from the model
+2. **Risk Tier** — Low / Moderate / High / Very High
+3. **Feature Contribution Analysis** — top 6 features ranked by influence
+4. **Per-feature Clinical Reasoning** — value-aware medical explanation
+5. **Clinical Recommendation** — tier-specific next steps
+
+### Risk Tiers
+
+| Tier | Probability | Recommendation |
+|---|---|---|
+| Low | 0–30% | Routine follow-up. Rescreen in 3–5 years |
+| Moderate | 30–60% | Consider stress testing. Follow-up in 6–12 months |
+| High | 60–80% | Cardiology referral. Consider CT angiography |
+| Very High | 80–100% | Urgent cardiology referral |
+
+---
+
+## ⚙️ Technical Details
+
+### Pipeline
+```
+Raw Input → StandardScaler → Logistic Regression → Probability
+```
+
+### Key Technical Decision — Feature Attribution Fix
+
+The naive approach multiplies model weights by raw input values:
+```python
+# WRONG — Age=52 dominates FastingBS=1 purely due to magnitude
+contributions[col] = abs(weights[i] * raw_value)
+```
+
+The correct approach uses scaled values — what the model actually received:
+```python
+# CORRECT — all features on same z-score scale
+transformed = input_df.copy()
+for step_name, step in pipeline.steps[:-1]:
+    transformed = step.transform(transformed)
+
+contributions[col] = abs(weights[i] * transformed[0][i])
+```
+
+### Why Logistic Regression over XGBoost
+
+Both models were trained and compared:
+
+| Metric | LR | XGBoost |
+|---|---|---|
+| Recall | **0.931** | 0.892 |
+| AUC-ROC | 0.900 | **0.929** |
+| F1 | **0.900** | 0.892 |
+
+XGBoost achieved higher AUC-ROC but lower Recall. Since missing a sick patient is the primary risk in clinical screening, **LR was chosen** based on superior Recall.
+
+### Encoding — Matches App Exactly
+```python
+df['Sex']            = df['Sex'].map({"M": 1, "F": 0})
+df['ExerciseAngina'] = df['ExerciseAngina'].map({"Y": 1, "N": 0})
+df['ChestPainType']  = df['ChestPainType'].map({"TA": 0, "ATA": 1, "NAP": 2, "ASY": 3})
+df['RestingECG']     = df['RestingECG'].map({"Normal": 0, "ST": 1, "LVH": 2})
+df['ST_Slope']       = df['ST_Slope'].map({"Up": 2, "Flat": 1, "Down": 0})
+```
+
+> ⚠️ LabelEncoder was intentionally avoided — it assigns labels alphabetically which creates a mismatch between training encoding and app encoding.
+
+---
+
+## 🔍 Error Analysis
+
+Out of 184 test patients, 21 were misclassified:
+- **7 False Negatives** — missed sick patients
+- **14 False Positives** — healthy patients flagged as sick
+
+**Pattern identified in false negatives:**
+```
+ExerciseAngina = 0 in ALL 7 missed cases
+ST_Slope = Upsloping in 5 out of 7
+```
+The model struggles with **silent ischemia** — patients who have heart disease but show no exercise angina and normal ST slope. This mirrors a known clinical blind spot in diabetic and elderly populations.
+
+**Subgroup fairness audit:**
+| Group | Accuracy |
+|---|---|
+| Male (n=146) | 88.4% |
+| Female (n=38) | 89.5% |
+| Age < 45 | 89.1% |
+| Age 45–55 | 84.5% ⚠️ |
+| Age 55–65 | 90.6% |
+| Age 65+ | 100% |
+
+> 45–55 age group is the weakest — middle-aged patients are most at risk of being undertriaged.
+
+---
+
+## 📁 Project Structure
+
+```
+├── heart_disease_app.py          # Gradio application
+├── Heart_Disease_Prediction.ipynb # Training notebook
+├── heart_disease_pipeline.joblib  # Saved pipeline
+├── heart.csv                      # Dataset
+└── README.md
+```
+
+---
+
+## 🚀 Run Locally
+
+```bash
+# Clone the repo
+git clone https://github.com/your-username/cardiovascular-risk-assessment
+
+# Install dependencies
+pip install gradio scikit-learn pandas numpy joblib
+
+# Run the app
+python heart_disease_app.py
+```
+
+---
+
+## 📦 Dataset
+
+[UCI Heart Disease Dataset](https://archive.ics.uci.edu/dataset/45/heart+disease)
+- 918 patient records
+- 11 features
+- Binary target: HeartDisease (0/1)
+- 55.3% positive class, 44.7% negative class
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is for **clinical decision support only** and does not replace physician judgement, complete history, physical examination, or validated diagnostic pathways.
+
+---
+
+## 🛠️ Future Improvements
+
+- [ ] XGBoost with SHAP interaction values for non-linear pattern detection
+- [ ] Subgroup-specific models for 45–55 age group
+- [ ] Confidence intervals on probability estimates
+- [ ] Silent ischemia detection module
+
+---
+
